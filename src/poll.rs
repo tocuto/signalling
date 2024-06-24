@@ -19,6 +19,7 @@ pub enum Signal {
     JoinRoom(String),
     ConnectAt(SystemTime),
     NextPoll(SystemTime),
+    SetService(String),
 }
 
 impl Signal {
@@ -29,6 +30,7 @@ impl Signal {
             Self::JoinRoom(_) => false,
             Self::ConnectAt(_) => false,
             Self::NextPoll(_) => false,
+            Self::SetService(_) => false,
         }
     }
 }
@@ -36,6 +38,14 @@ impl Signal {
 #[derive(Serialize, Deserialize)]
 struct IdentResponse {
     token: String,
+}
+
+fn is_service_allowed(env: &Env, svc: &str) -> Result<bool> {
+    Ok(env
+        .var("SERVICES")?
+        .to_string()
+        .split(';')
+        .any(|v| v == svc))
 }
 
 pub async fn ident(env: Env) -> Result<Response> {
@@ -54,7 +64,7 @@ pub async fn poll(mut req: Request, env: Env) -> Result<Response> {
     let signals = req.json::<Vec<Signal>>().await?;
     if signals
         .iter()
-        .filter(|s| !matches!(s, Signal::JoinRoom(_)))
+        .filter(|s| !matches!(s, Signal::JoinRoom(_) | Signal::SetService(_)))
         .any(|s| !s.can_send())
     {
         return Response::error("Invalid signals: can't send.", 400);
@@ -65,6 +75,20 @@ pub async fn poll(mut req: Request, env: Env) -> Result<Response> {
         Some(user) => user,
         None => return Response::error("Invalid token.", 403),
     };
+
+    if user.get_service().is_none() {
+        let svc = match signals.iter().find(|s| matches!(s, Signal::SetService(_))) {
+            Some(Signal::SetService(svc)) => svc,
+            None => return Response::error("Need to set service.", 400),
+            Some(_) => return Response::error("server logic error.", 500),
+        };
+
+        if !is_service_allowed(&env, svc)? {
+            return Response::error("Invalid service.", 400);
+        }
+
+        user.set_service(svc.clone());
+    }
 
     let peer = match user.get_peer() {
         Some(peer) => Some(peer.clone()),

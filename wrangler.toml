@@ -14,3 +14,6 @@ crons = [ "0 * * * *" ]
 [[r2_buckets]]
 binding = "rtc"
 bucket_name = "chessagon-signalling"
+
+[vars]
+SERVICES = "chessagon;watchparty"

@@ -38,6 +38,7 @@ pub struct AuthData {
 pub struct AuthMetadata {
     kill_at: SystemTime,
     next_poll: SystemTime,
+    service: Option<String>,
     room: Option<String>,
     peer: Option<String>,
 }
@@ -46,11 +47,13 @@ impl Default for AuthMetadata {
         AuthMetadata {
             kill_at: SystemTime::now() + Duration::from_secs(MAX_CONNECTION),
             next_poll: SystemTime::now() + Duration::from_secs(FIRST_POLL),
+            service: None,
             room: None,
             peer: None,
         }
     }
 }
+
 impl Metadata for AuthMetadata {}
 impl From<HashMap<String, String>> for AuthMetadata {
     fn from(value: HashMap<String, String>) -> Self {
@@ -66,12 +69,14 @@ impl From<HashMap<String, String>> for AuthMetadata {
             .map(|v| v.parse().unwrap())
             .map(|v| UNIX_EPOCH + Duration::from_secs(v))
             .expect("missing next_poll");
+        let service = value.get("service").filter(|v| !v.is_empty()).cloned();
         let room = value.get("room").filter(|v| !v.is_empty()).cloned();
         let peer = value.get("peer").filter(|v| !v.is_empty()).cloned();
 
         AuthMetadata {
             kill_at,
             next_poll,
+            service,
             room,
             peer,
         }
@@ -92,11 +97,13 @@ impl From<AuthMetadata> for HashMap<String, String> {
             .expect("time travel on next_poll?")
             .as_secs()
             .to_string();
+        let service = value.service.unwrap_or_default();
         let room = value.room.unwrap_or_default();
         let peer = value.peer.unwrap_or_default();
 
         map.insert("kill_at".to_owned(), kill_at);
         map.insert("next_poll".to_owned(), next_poll);
+        map.insert("service".to_owned(), service);
         map.insert("room".to_owned(), room);
         map.insert("peer".to_owned(), peer);
         map
@@ -104,6 +111,11 @@ impl From<AuthMetadata> for HashMap<String, String> {
 }
 
 impl Auth {
+    pub fn set_service(&mut self, service: String) {
+        self.meta.service = Some(service);
+        self.modified = true;
+    }
+
     pub fn set_room(&mut self, room: &Room) {
         self.meta.room = Some(room.key.clone());
         self.modified = true;
@@ -112,6 +124,10 @@ impl Auth {
     pub fn set_peer(&mut self, peer: Option<String>) {
         self.meta.peer = peer;
         self.modified = true;
+    }
+
+    pub fn get_service(&self) -> Option<&String> {
+        self.meta.service.as_ref()
     }
 
     pub fn get_room(&self) -> Option<&String> {

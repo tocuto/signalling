@@ -17,6 +17,7 @@ impl BucketInfo for RoomInfo {
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct RoomData {
+    service: String,
     offer: String,
     answer: Option<String>,
 }
@@ -48,6 +49,7 @@ impl Room {
 
     pub fn join_room(&mut self, peer: &mut Auth) -> bool {
         let data = self.data.as_mut().expect("invalid state");
+        let service = peer.get_service().expect("invalid state").clone();
 
         let is_offer = data.offer.is_empty();
         let is_answer = data.answer.is_none();
@@ -56,8 +58,14 @@ impl Room {
         }
 
         if is_offer {
+            // Creating room
+            data.service = service;
             data.offer = peer.key.clone();
+        } else if service != data.service {
+            // Can't join room with invalid service
+            return false;
         } else {
+            // Valid service
             data.answer = Some(peer.key.clone());
         }
 
