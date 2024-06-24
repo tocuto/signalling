@@ -61,7 +61,10 @@ pub async fn poll(mut req: Request, env: Env) -> Result<Response> {
         Some(token) => token,
         None => return Response::error("Missing token.", 403),
     };
-    let signals = req.json::<Vec<Signal>>().await?;
+    let signals = match req.json::<Vec<Signal>>().await {
+        Ok(s) => s,
+        Err(e) => return Response::error(format!("Malformed request: {}", e), 400),
+    };
     if signals
         .iter()
         .filter(|s| !matches!(s, Signal::JoinRoom(_) | Signal::SetService(_)))
